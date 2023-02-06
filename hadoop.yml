@@ -1,0 +1,104 @@
+- hosts: all
+  vars_files:
+  - var.yml  
+  tasks:
+  - name: "Hadoop"       
+    get_url:
+      url: "https://archive.apache.org/dist/hadoop/common/hadoop-1.2.1/hadoop-1.2.1-1.x86_64.rpm"
+      dest: /root/
+  - debug:
+      msg: "Hadoop downloaded"  
+  - name: "JAVA jdk file"    
+    get_url:
+      url: "https://hadoopanisble.s3.ap-south-1.amazonaws.com/jdk-8u171-linux-x64.rpm"
+      dest: /root/
+  - debug:
+      msg: "jdk downloaded"    
+      #- shell: "rpm -ivh jdk-8u171-linux-x64.rpm"  
+  - name: "Install jdk"
+    yum:
+      name: "/root/jdk-8u171-linux-x64.rpm"
+      state: present
+  - name: "Install hadoop"
+    shell: "rpm -ivh /root/hadoop-1.2.1-1.x86_64.rpm --force"
+          
+
+- hosts: namenode    
+  vars_files:
+  - var.yml 
+  vars_prompt:
+    - name: "nn_dir"
+      private: no
+      prompt: "Enter Master node folder name "      
+  tasks:
+  - name: "configure hdfs file in namenode"
+    template:  
+      dest: "/etc/hadoop/hdfs-site.xml"
+      src: "hdfs.xml"
+  - name: "configure core file in namenode"
+    template:
+      dest: "/etc/hadoop/core-site.xml"
+      src: "core.xml"      
+  - name: "Remove directory if already exist"
+    file:
+      state: absent
+      path: "/{{nn_dir}}"      
+  - name: "Create a directory in namenode"
+    file:
+      state: "directory"
+      path: "/{{nn_dir}}"
+  - name: "formate namenode directory "
+    shell: "echo Y | hadoop namenode -format"
+  - command: "hadoop-daemon.sh stop namenode"  
+  - command: "hadoop-daemon.sh start namenode"
+  - debug:
+      msg: "Namenode started!" 
+
+- hosts: datanode
+  vars_prompt:
+  - name: "dn_dir"
+    private: no
+    prompt: "Enter Datanode Folder Name "    
+  vars_files:
+  - var.yml      
+  tasks:
+  - name: "configure hdfs file in datanode"
+    template:
+      dest: "/etc/hadoop/hdfs-site.xml"
+      src: "dhdfs.xml"
+  - name: "configure core file in datanode"
+    template:
+      dest: "/etc/hadoop/core-site.xml"
+      src: "dcore.xml"
+  - name: "Remove directory if already exist"
+    file:
+      state: absent
+      path: "/{{dn_dir}}"
+  - name: "Create a directory in datanode"
+    file:
+      state: "directory"
+      path: "/{{dn_dir}}"
+  - command: "hadoop-daemon.sh stop datanode"
+  - command: "hadoop-daemon.sh start datanode"
+  - debug:
+      msg: "Datanode started!"
+
+
+- hosts: clientnode
+  vars_prompt:
+    - name: "filename"
+      private: no
+      prompt: "Enter filename: "     
+  vars_files:
+  - var.yml       
+  tasks:
+  - name: "configure core file in clientnode"
+    template:
+      dest: "/etc/hadoop/core-site.xml"
+      src: "dcore.xml"
+  - name: "Upload file on target node"
+    copy:
+      src: "/ansiblews/hadoopws/{{filename}}"
+      dest: "/root/{{filename}}"        
+  - name: "Put file on cluster"    
+    command: "hadoop fs -put /root/{{filename}} /"   
